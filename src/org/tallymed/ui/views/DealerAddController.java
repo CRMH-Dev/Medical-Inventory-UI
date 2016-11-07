@@ -38,7 +38,7 @@ public class DealerAddController {
 			RestTemplate restTemplate = new RestTemplate();
 			Stage stage = (Stage) cancelButton.getScene().getWindow();
 			DealerOperation result = restTemplate.postForObject(uri, dealerOperation, DealerOperation.class);
-			stage.close();
+			stage.hide();
 		}
 	}
 	

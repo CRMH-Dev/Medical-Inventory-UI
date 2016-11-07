@@ -1,5 +1,7 @@
 package org.tallymed.ui.views.forms;
 
+import org.springframework.beans.propertyeditors.StringArrayPropertyEditor;
+
 import com.jfoenix.controls.datamodels.treetable.RecursiveTreeObject;
 
 import javafx.beans.property.SimpleStringProperty;
@@ -30,11 +32,13 @@ public class InventoryProduct extends RecursiveTreeObject<InventoryProduct> {
 	private StringProperty mfgDate;
 	
 	private StringProperty expDate;
+	
+	private StringProperty unitQuantity;
 
 	public InventoryProduct(String dealer, String batchId, String productName,
 			String productComposition, String mfgCompanyName, String mfgShortName,
 			String unitType, String mrp, String purchasePrice, String quantity,
-			String mfgDate, String expDate) {
+			String mfgDate, String expDate, String unitQuantity) {
 		this.dealer = new SimpleStringProperty(dealer);
 		this.batchId = new SimpleStringProperty(batchId);
 		this.productName = new SimpleStringProperty(productName);
@@ -47,6 +51,7 @@ public class InventoryProduct extends RecursiveTreeObject<InventoryProduct> {
 		this.quantity = new SimpleStringProperty(quantity);
 		this.mfgDate = new SimpleStringProperty(mfgDate);
 		this.expDate = new SimpleStringProperty(expDate);
+		this.unitQuantity = new SimpleStringProperty(unitQuantity);
 	}
 
 	public StringProperty getDealer() {
@@ -143,6 +148,14 @@ public class InventoryProduct extends RecursiveTreeObject<InventoryProduct> {
 
 	public void setExpDate(StringProperty expDate) {
 		this.expDate = expDate;
+	}
+
+	public StringProperty getUnitQuantity() {
+		return unitQuantity;
+	}
+
+	public void setUnitQuantity(StringProperty unitQuantity) {
+		this.unitQuantity = unitQuantity;
 	}
 	
 	

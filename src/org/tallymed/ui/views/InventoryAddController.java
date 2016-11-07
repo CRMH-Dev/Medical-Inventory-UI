@@ -2,20 +2,26 @@ package org.tallymed.ui.views;
 
 import java.io.IOException;
 import java.net.URL;
+import java.sql.Date;
+
 import javafx.scene.layout.*;
+
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Observable;
 import java.util.ResourceBundle;
 import java.util.Set;
 
-import org.springframework.util.comparator.InvertibleComparator;
+import javax.swing.plaf.basic.BasicTreeUI.TreeTraverseAction;
+
 import org.springframework.web.client.RestTemplate;
 import org.tallymed.service.clientserv.op.DealerOperation;
+import org.tallymed.service.clientserv.op.ProductInventoryOperation;
+import org.tallymed.service.clientserv.op.Products;
 import org.tallymed.service.clientserv.type.OperationType;
+import org.tallymed.service.clientserv.type.ProductOperationType;
 import org.tallymed.ui.util.CommonUtil;
-import org.tallymed.ui.views.InventoryController.User;
 import org.tallymed.ui.views.forms.InventoryProduct;
 
 import com.jfoenix.controls.JFXButton;
@@ -26,16 +32,19 @@ import com.jfoenix.controls.JFXTreeTableView;
 import com.jfoenix.controls.RecursiveTreeItem;
 import com.jfoenix.controls.datamodels.treetable.RecursiveTreeObject;
 
+import javafx.beans.property.StringProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.fxml.Initializable;
-import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeTableColumn;
+import javafx.scene.control.TreeTablePosition;
+import javafx.scene.control.TreeTableView.TreeTableViewSelectionModel;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -86,6 +95,9 @@ public class InventoryAddController implements Initializable {
 
 	@FXML
 	private JFXTextField purchaseDate;
+	
+	@FXML
+	private JFXTextField unitQuantity;
 
 	@FXML
 	private JFXTextField invoiceID;
@@ -114,10 +126,37 @@ public class InventoryAddController implements Initializable {
 		for(String dealerName : dealerOperation.getDealersName()){
 			dealers.add(dealerName);
 		}
+		dealer.valueProperty().addListener(new ChangeListener<String>() {
+			@Override
+			public void changed(ObservableValue<? extends String> observable, String oldValue, String newValue) {
+				if (newValue.equalsIgnoreCase("Add New")) {
+					try {
+						Stage popupStage = new Stage(StageStyle.TRANSPARENT);
+						FXMLLoader loader = new FXMLLoader();
+						loader.setLocation(RootlayoutController.class.getResource("DealerAddPopup.fxml"));
+						AnchorPane root = (AnchorPane) loader.load();
+						popupStage.initOwner(dealer.getScene().getWindow());
+						popupStage.initModality(Modality.WINDOW_MODAL);
+						popupStage.setScene(new Scene(root, 330, 300));
+						popupStage.show();
+						popupStage.setOnHidden(event -> {
+							DealerOperation dealerOperation = findDealers();
+							for(String dealerName : dealerOperation.getDealersName()){
+								dealers.add(dealerName);
+							}
+							dealer.setItems(dealers);
+							dealer.getSelectionModel().clearSelection();
+						});
+					} catch (IOException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		});
 		dealer.setItems(dealers);
 
 		ObservableList<String> units = FXCollections.observableArrayList();
-		units.add("Add New1");
+		units.add("Add New");
 		unitType.setItems(units);
 		if (inventoryProductMap == null || inventoryProductMap.isEmpty()) {
 			treeView.setVisible(false);
@@ -224,21 +263,6 @@ public class InventoryAddController implements Initializable {
 	private void handleDealerComboClick() {
 		String message = validateDealerInvoice();
 		if (message == "") {
-			if (dealer.getValue().equalsIgnoreCase("Add New")) {
-				try {
-					Stage popupStage = new Stage(StageStyle.TRANSPARENT);
-					FXMLLoader loader = new FXMLLoader();
-					loader.setLocation(RootlayoutController.class.getResource("DealerAddPopup.fxml"));
-					AnchorPane root = (AnchorPane) loader.load();
-					popupStage.initOwner(dealer.getScene().getWindow());
-					popupStage.initModality(Modality.WINDOW_MODAL);
-					popupStage.setScene(new Scene(root, 330, 300));
-					popupStage.show();
-					popupStage.showAndWait();
-				} catch (IOException e) {
-					e.printStackTrace();
-				}
-			}
 			addDealerInvoice.setDisable(true);
 			dealer.setDisable(true);
 			invoiceID.setDisable(true);
@@ -257,7 +281,7 @@ public class InventoryAddController implements Initializable {
 				InventoryProduct inventoryProduct = new InventoryProduct(dealer.getValue(), batchId.getText(),
 						productName.getText(), productComposition.getText(), mfgCompanyName.getText(),
 						mfgShortName.getText(), unitType.getValue(), mrp.getText(), purchasePrice.getText(),
-						quantity.getText(), mfgDate.getText(), expDate.getText());
+						quantity.getText(), mfgDate.getText(), expDate.getText(), unitQuantity.getText());
 				inventoryProductMap.put(batchId.getText(), inventoryProduct);
 				treeView.setVisible(true);
 				saveAllButton.setVisible(true);
@@ -269,7 +293,72 @@ public class InventoryAddController implements Initializable {
 			CommonUtil.showErrorPopup(null, "Please provide dealer invoice details!!", "An error has been occured!");
 		}
 	}
+	
+	@FXML
+	private void handleDelete(){
+		if(treeView != null && treeView.getSelectionModel() != null){
+			TreeTableViewSelectionModel<InventoryProduct> treeTableViewSelectionModel = treeView.getSelectionModel();
+			if(!treeTableViewSelectionModel.getSelectedCells().isEmpty()){
+				StringProperty batchProperty = treeTableViewSelectionModel.getSelectedCells().get(0).getTreeItem().getValue().getBatchId();
+				String batchKey = batchProperty.getValue();
+				if(inventoryProductMap != null && !inventoryProductMap.isEmpty()){
+					inventoryProductMap.remove(batchKey);
+				}
+				if(inventoryProductMap != null && !inventoryProductMap.isEmpty()){
+					refreshTableView();
+				}
+				else{
+					treeView.setVisible(false);
+					saveAllButton.setVisible(false);
+					editButton.setVisible(false);
+					deleteButton.setVisible(false);
+				}
+			}
+			else{
+				CommonUtil.showWarningPopup(null, "Please select a row to delete!!", "Warning!!!");
+			}
+		}
+	}
+	
+	@FXML
+	private void handleEdit(){
+		
+	}
 
+	@FXML
+	private void handleSaveAll(){
+		ProductInventoryOperation productInventoryOperation = new ProductInventoryOperation();
+		Set<String> inventoryKeySet = inventoryProductMap.keySet();
+	//	productInventoryOperation.setDateOfPurchase(Date.valueOf(purchaseDate.getText()));
+		productInventoryOperation.setDealerName(dealer.getValue());
+		productInventoryOperation.setInvoiceID(invoiceID.getText());
+		productInventoryOperation.setOperationType(OperationType.SAVE);
+		productInventoryOperation.setProducts(new ArrayList<Products>());
+		productInventoryOperation.setProductOperationType(ProductOperationType.PRODUCT);
+		for(String inventoryKey : inventoryKeySet){
+			InventoryProduct inventoryProduct = inventoryProductMap.get(inventoryKey);
+			Products product = new Products();
+			product.setBatchId(inventoryProduct.getBatchId().get());
+			product.setCompanyName(inventoryProduct.getMfgCompanyName().get());
+			product.setCompanyShortName(inventoryProduct.getMfgShortName().get());
+			product.setCurrentStock(Integer.parseInt(inventoryProduct.getQuantity().get()));
+			//product.setExpDate(Date.valueOf(inventoryProduct.getExpDate().get()));
+			//product.setMfgDate(Date.valueOf(inventoryProduct.getMfgDate().get()));
+			product.setProductComposition(inventoryProduct.getProductComposition().get());
+			product.setProductName(inventoryProduct.getProductName().get());
+			product.setPurchasePrice(Float.valueOf(inventoryProduct.getPurchasePrice().get()));
+			product.setSellingPrice(Float.valueOf(inventoryProduct.getMrp().get()));
+			product.setUomQuantity(Integer.valueOf(inventoryProduct.getUnitQuantity().get()));
+			product.setUomType(inventoryProduct.getUnitType().get());
+			productInventoryOperation.getProducts().add(product);
+		}
+		String uri1 = "http://localhost:8080/productInventory";
+		RestTemplate restTemplate = new RestTemplate();
+		ProductInventoryOperation operation = restTemplate.postForObject(uri1, productInventoryOperation, ProductInventoryOperation.class);
+		inventoryProductMap.clear();
+		CommonUtil.showInfoPopup(null, "All Data saved successfully", "success");
+	}
+	
 	private boolean validProduct() {
 		return true;
 	}
